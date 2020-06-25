@@ -3,15 +3,10 @@
 namespace MS.Async{
     
     public static class ValueTasks{
-        public static async ValueTask WhenAll(params ValueTask[] tasks){
-            for(var i = 0; i < tasks.Length;i++){
-                var task = tasks[i];
-                if(task.IsCompleted){
-                    continue;
-                }else{
-                    await task;
-                }
-            }
+
+        public static  ValueTask WhenAll(params ValueTask[] tasks){
+            var source = AllValueTaskSource.Request(tasks);
+            return new ValueTask(source,source.Token);
         }
 
         public static ValueTask<WhenAnyResult> WhenAny(params ValueTask[] tasks){
