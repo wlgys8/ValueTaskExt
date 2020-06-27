@@ -2,12 +2,13 @@
 using System.Threading.Tasks;
 using System;
 using System.Threading.Tasks.Sources;
+using System.Linq;
 
 namespace MS.Async{
     internal class AnyValueTaskSource : IValueTaskSource<WhenAnyResult>
     {
         
-        private IList<ValueTask> _tasks;
+        private IEnumerable<ValueTask> _tasks;
         private short _token;
 
         private Action<object> _continuation;
@@ -17,7 +18,7 @@ namespace MS.Async{
         public AnyValueTaskSource(){
         }
 
-        public void Initialize(IList<ValueTask> tasks,short token){
+        public void Initialize(IEnumerable<ValueTask> tasks,short token){
             if(_token != 0){
                 throw new InvalidOperationException();
             }
@@ -46,7 +47,7 @@ namespace MS.Async{
         public WhenAnyResult GetResult(short token){
             AssertToken(token);
             var index = _firstCompletedTaskIndex;
-            var task =  _tasks[_firstCompletedTaskIndex];
+            var task =  _tasks.ElementAt(_firstCompletedTaskIndex);
             this.Dispose();
             return new WhenAnyResult(){
                 index = index,
@@ -56,11 +57,10 @@ namespace MS.Async{
 
         public ValueTaskSourceStatus GetStatus(short token){
             AssertToken(token);
-            if(_tasks.Count == 0){
+            if(_tasks.Count() == 0){
                 return ValueTaskSourceStatus.Succeeded;
             }
-            for(var i = 0; i < _tasks.Count; i ++){
-                var task = _tasks[i];
+            foreach(var task in _tasks){
                 if(task.IsCompleted){
                     if(task.IsCanceled){
                         return ValueTaskSourceStatus.Canceled;
@@ -78,8 +78,10 @@ namespace MS.Async{
             AssertToken(token);
             this._continuation = continuation;
             this._state = state;
-            for(var i = 0; i < _tasks.Count;i++){
-                WaitTask(_tasks[i],i);
+            var index = 0;
+            foreach(var task in _tasks){
+                WaitTask(task,index);
+                index ++;
             }
         }
 
@@ -106,7 +108,7 @@ namespace MS.Async{
 
         private static Stack<AnyValueTaskSource> _pool = new Stack<AnyValueTaskSource>();
 
-        public static ValueTask<WhenAnyResult> WhenAny(IList<ValueTask> tasks){
+        public static ValueTask<WhenAnyResult> WhenAny(IEnumerable<ValueTask> tasks){
             var token = AllocateToken();
             AnyValueTaskSource source = null;
             if(_pool.Count > 0){
@@ -117,10 +119,7 @@ namespace MS.Async{
             source.Initialize(tasks,token);
             return new ValueTask<WhenAnyResult>(source,token);
         }
-
-        public static ValueTask<WhenAnyResult> WhenAny(params ValueTask[] tasks){
-            return WhenAny(new List<ValueTask>(tasks));
-        }
+     
     }
 
     public struct WhenAnyResult{
